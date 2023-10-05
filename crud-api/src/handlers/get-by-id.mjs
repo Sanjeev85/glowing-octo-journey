@@ -1,64 +1,52 @@
-// Create clients and set shared const values outside of the handler.
+import {  GetCommand } from '@aws-sdk/lib-dynamodb';
+import { ddbDocClient , tableNamee} from '../config/dbConfig.mjs';
+import { checkUserExistance } from '../utils/checkUserExistance.mjs';
 
-// Create a DocumentClient that represents the query to add an item
-import { DynamoDBClient, ListTablesCommand } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
-const client = new DynamoDBClient({
-  endpoint:'https://8000-sanjeev85-glowingoctojo-4jdfyiben8k.ws-us105.gitpod.io'
-});
-const ddbDocClient = DynamoDBDocumentClient.from(client);
 
-// Get the DynamoDB table name from environment variables
-const tableName = "USERS";
 
-/**
- * A simple example includes a HTTP get method to get one item by id from a DynamoDB table.
- */
+const tableName = tableNamee 
+
+
 export const getByIdHandler = async (event) => {
   if (event.httpMethod !== 'GET') {
     throw new Error(`getMethod only accept GET method, you tried: ${event.httpMethod}`);
   }
-  // All log statements are written to CloudWatch
-  // console.info('received:', event);
- 
-  // Get id from pathParameters from APIGateway because of `/{id}` at template.yaml
+
   const userID = Number(event.pathParameters.id);
-  console.log('id for the request', userID);
-  const idByMe = 1;
-  console.log(userID === idByMe)
-  console.log(typeof userID)
-  console.log(typeof idByMe)
-  console.log('---------------------------------')
- 
-  // Get the item from the table
-  // https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/DynamoDB/DocumentClient.html#get-property
-  var params = {
-    TableName : tableName,
-    Key: { id: userID },
-  };
-  console.log('params', params)
+  const response = {};
 
-  const listTablesParams = {TableName : tableName};
+  //check if user exists
+  const userExist = await checkUserExistance(userID)
+  if(!userExist) {
+    response.body = JSON.stringify({
+      msg: 'user not exists kindly create one',
+    })
+    response.statusCode= 404
+    return response
+  }
 
-  const existingTableNames = await ddbDocClient.send(new ListTablesCommand(listTablesParams));
-  console.log('Existing tables',existingTableNames )
   const command = new GetCommand({
-    TableName: "USERS",
+    TableName: tableName,
     Key: {
       id: userID
     }
   });
+
+
   try {
     const data = await ddbDocClient.send(command);
-    var item = data;
-  } catch (err) {
-    console.log("Error", err);
+    var item = data.Item;
+    response.statusCode = 200;
+    response.body = JSON.stringify(item)
+  }
+  catch(err) {
+      response.statusCode = 500
+      response.body = JSON.stringify({
+        msg: 'Internal Server Error'
+      })
+      console.log('err', err.message)
   }
  
-  const response = {
-    statusCode: 200,
-    body: JSON.stringify(item)
-  };
  
   // All log statements are written to CloudWatch
   console.info(`response from: ${event.path} statusCode: ${response.statusCode} body: ${response.body}`);
